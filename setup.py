@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='featuretools4s',
-    version=0.1,
+    version="0.1.1",
     description=(
         'Run FeatureTools to automate Feature Engineering distributionally on Spark. '
     ),
@@ -19,10 +19,10 @@ setup(
     platforms=["all"],
     url='https://github.com/pan5431333/featuretools4s',
     install_requires=[
-        'pyspark',
-        'numpy',
-        'pandas',
-        'featuretools'
+        'pyspark>=2.1',
+        'numpy>=1.14.5',
+        'pandas>=0.23.1',
+        'featuretools>=0.3.0'
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
