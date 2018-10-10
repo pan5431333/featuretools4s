@@ -152,7 +152,14 @@ class EntitySetSpark:
         if total_rows == 0:
             raise ValueError("Given entity {0} contains 0 rows! ".format(entity.entity_id))
 
-        # 2. Validate that index column is unique
+        # 2. Validate index and time_index column exist
+        if entity.index not in entity.df.columns:
+            raise ValueError("Index column '{0}' does not exist in entity {1}!".format(entity.index, entity.entity_id))
+        if entity.time_index is not None and entity.time_index not in entity.df.columns:
+            raise ValueError("Time index column '{0}' does not exist in entity {1}!".format(entity.time_index,
+                                                                                            entity.entity_id))
+
+        # 3. Validate that index column is unique
         if entity.index is not None:
             index_distinct_rows = entity.df.select(entity.index).distinct().count()
             if total_rows != index_distinct_rows:

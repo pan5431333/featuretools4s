@@ -1,4 +1,4 @@
-import featuretools4s.featuretools4s as fts
+import featuretools4s as fts
 from pyspark.sql import SparkSession
 
 import os
@@ -9,8 +9,8 @@ os.environ["PATH"] = "C:\Python36;" + os.environ["PATH"]
 pd.set_option('display.expand_frame_repr', False)
 spark = SparkSession.builder.master("local[*]").getOrCreate()
 
-order_df = spark.read.csv("resources/order.csv", header=True, inferSchema=True).sort("sales_tax")
-customer_df = spark.read.csv("resources/customer.csv", header=True, inferSchema=True)
+order_df = spark.read.csv("C:/Users/MengPan/PycharmProjects/BelleTire/resources/order.csv", header=True, inferSchema=True).sort("sales_tax")
+customer_df = spark.read.csv("C:/Users/MengPan/PycharmProjects/BelleTire/resources/customer.csv", header=True, inferSchema=True)
 
 es = fts.EntitySetSpark(id="test")
 es.entity_from_dataframe("order", order_df, index="order_num", time_index="wo_timestamp")
