@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='featuretools4s',
-    version="0.1.1",
+    version="0.1.4",
     description=(
         'Run FeatureTools to automate Feature Engineering distributionally on Spark. '
     ),

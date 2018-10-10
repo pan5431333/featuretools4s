@@ -1,4 +1,4 @@
-import featuretools4s as fts
+import featuretools4s.featuretools4s as fts
 from pyspark.sql import SparkSession
 
 import os
