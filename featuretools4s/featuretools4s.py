@@ -158,6 +158,10 @@ class EntitySetSpark:
         if entity.time_index is not None and entity.time_index not in entity.df.columns:
             raise ValueError("Time index column '{0}' does not exist in entity {1}!".format(entity.time_index,
                                                                                             entity.entity_id))
+        if entity.secondary_time_index is not None and entity.secondary_time_index not in entity.df.columns:
+            raise ValueError(
+                "Second time index column '{0}' does not exist in entity {1}!".format(entity.secondary_time_index,
+                                                                                      entity.entity_id))
 
         # 3. Validate that index column is unique
         if entity.index is not None:
@@ -260,7 +264,6 @@ def dfs(spark: SparkSession,
     entities = [entityset.entity_dict[entity].drop_data() for entity in entityset.entity_dict]
     relationships = entityset.relationships
     rdd = repartitioned.rdd.mapPartitions(lambda iteration: run_single_partition(iteration, all_columns,
-                                                                             es_id, entities, relationships))
+                                                                                 es_id, entities, relationships))
     res_df = spark.createDataFrame(rdd)
     return res_df
-
