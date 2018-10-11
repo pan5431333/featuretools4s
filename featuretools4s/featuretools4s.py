@@ -63,7 +63,7 @@ class Relationship:
         self.child_variable = child_variable
 
 
-class EntitySetSpark:
+class EntitySet:
     """
     todo Current known limitations:
     1. Different entities should NOT have same columns. How to solve this?
@@ -183,7 +183,7 @@ class EntitySetSpark:
 
 
 def dfs(spark: SparkSession,
-        entityset: EntitySetSpark,
+        entityset: EntitySet,
         target_entity: str,
         primary_col: str,
         cutoff_time=None,

@@ -1,1 +1,1 @@
-from .featuretools4s import EntitySetSpark, Relationship, dfs
+from .featuretools4s import EntitySet, Relationship, dfs
