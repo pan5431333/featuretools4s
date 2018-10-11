@@ -1,10 +1,9 @@
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import udf, col
-import pandas as pd
-import numpy as np
 import featuretools as ft
+import numpy as np
+import pandas as pd
 from dateutil import parser
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.dataframe import DataFrame
 
 
 class EntityColumn:
@@ -228,6 +227,8 @@ def dfs(spark: SparkSession,
         chunk_size=None,
         n_jobs=1,
         num_partition: int = None):
+    # TODO need to handle cases when `cutoff_time` is not None
+
     big_df = entityset.get_big_df()
     repartition_col = EntitySpark.change_col_name(primary_entity, primary_col)
     n_partitions = num_partition if num_partition is not None else big_df.select(repartition_col).distinct().count()
