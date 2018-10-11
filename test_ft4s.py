@@ -1,4 +1,4 @@
-import featuretools4s as fts
+import featuretools4s.featuretools4s as fts
 from pyspark.sql import SparkSession
 
 import os
@@ -14,8 +14,12 @@ customer_df = spark.read.csv("C:/Users/MengPan/PycharmProjects/BelleTire/resourc
 
 es = fts.EntitySetSpark(id="test")
 es.entity_from_dataframe("order", order_df, index="order_num", time_index="wo_timestamp")
+es.entity_from_dataframe("order2", order_df, index="order_num", time_index="wo_timestamp")
 es.entity_from_dataframe("customer", customer_df, index="cust_num")
 es.add_relationship(fts.Relationship(es["customer"]["cust_num"], es["order"]["cust_num"]))
+es.add_relationship(fts.Relationship(es["customer"]["cust_num"], es["order2"]["cust_num"]))
 
 features = fts.dfs(spark, entityset=es, target_entity="customer", primary_col="cust_num", num_partition=5)
 features.show()
+
+# es.get_big_df().show()

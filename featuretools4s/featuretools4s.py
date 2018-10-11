@@ -87,7 +87,7 @@ class EntitySetSpark:
         self.entity_dict[entity_id] = entity
 
     def get_big_df(self):
-        scanned_cols = set()
+        scannned_entities = set()
 
         if len(self.relationships) == 0:
             raise ValueError("No relationships defined in {0}!".format(self.id))
@@ -97,8 +97,8 @@ class EntitySetSpark:
         parent_col = relationship.parent_variable.column_name
         child_entity = relationship.child_variable.entity_id
         child_col = relationship.child_variable.column_name
-        scanned_cols.add(parent_col)
-        scanned_cols.add(child_col)
+        scannned_entities.add(parent_entity)
+        scannned_entities.add(child_entity)
         parent_df = self.entity_dict[parent_entity].df
         child_df = self.entity_dict[child_entity].df
 
@@ -116,19 +116,25 @@ class EntitySetSpark:
                 parent_df = self.entity_dict[parent_entity].df
                 child_df = self.entity_dict[child_entity].df
                 if parent_col == child_col:
-                    sub_res = parent_df.join(child_df, on=[parent_col])
+                    if parent_entity in scannned_entities:
+                        res = res.join(child_df, on=parent_col)
+                    elif child_entity in scannned_entities:
+                        res = res.join(parent_df, on=parent_col)
+                    else:
+                        raise ValueError(
+                            "Neither {0} or {1} is in its previous relationships: {2}".format(parent_entity,
+                                                                                              child_entity,
+                                                                                              scannned_entities))  # todo
                 else:
-                    sub_res = parent_df.join(child_df, parent_df[parent_col] == child_df[child_col])
-                if parent_col in scanned_cols:
-                    res = res.join(sub_res, [parent_col])
-                    scanned_cols.add(child_col)
-                elif child_col in scanned_cols:
-                    res = res.join(sub_res, [child_col])
-                    scanned_cols.add(parent_col)
-                else:
-                    raise RuntimeError("Neither {0} or {1} is in its previous relationships: {2}".format(parent_col,
-                                                                                                         child_col,
-                                                                                                         scanned_cols))
+                    if parent_entity in scannned_entities:
+                        res = res.join(child_df, res[parent_col] == child_df[child_col])
+                    elif child_entity in scannned_entities:
+                        res = res.join(parent_df, res[child_col] == parent_df[parent_col])
+                    else:
+                        raise ValueError(
+                            "Neither {0} or {1} is in its previous relationships: {2}".format(parent_entity,
+                                                                                              child_entity,
+                                                                                              scannned_entities))
         return res
 
     def add_relationship(self, relationship: Relationship):
@@ -171,7 +177,7 @@ class EntitySetSpark:
                                                                                                index_distinct_rows,
                                                                                                entity.entity_id))
 
-        # todo 3. Validate that time index column can be converted into time
+        # todo 4. Validate that time index column can be converted into time
         # if entity.time_index is not None:
         #     entity.dataframe.withColumn(entity.time_index, from_unixtime(unix_timestamp(col(entity.time_index))))
 
