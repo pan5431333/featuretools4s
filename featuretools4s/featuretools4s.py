@@ -1,8 +1,10 @@
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.functions import udf, col
 import pandas as pd
 import numpy as np
 import featuretools as ft
+from dateutil import parser
 
 
 class EntityColumn:
@@ -93,9 +95,11 @@ class EntitySet:
                               index: str = None,
                               variable_types: dict = None,
                               time_index: str = None,
-                              secondary_time_index: str = None):
+                              secondary_time_index: str = None,
+                              validate_data: bool = True):
         entity = EntitySpark(entity_id, dataframe, index, variable_types, time_index, secondary_time_index)
-        self._validate_spark_entity(entity)
+        if validate_data:
+            self._validate_spark_entity(entity)
         self.entity_dict[entity_id] = entity
 
     def get_big_df(self):
@@ -186,9 +190,28 @@ class EntitySet:
                                                                                                index_distinct_rows,
                                                                                                entity.entity_id))
 
-        # todo 4. Validate that time index column can be converted into time
-        # if entity.time_index is not None:
-        #     entity.dataframe.withColumn(entity.time_index, from_unixtime(unix_timestamp(col(entity.time_index))))
+        # 4. Validate that time index column can be converted into time
+        if entity.time_index is not None:
+            time_index = entity.time_index
+            entity_id = entity.entity_id
+            EntitySet._validate_time_index_col(entity.df, entity_id, time_index)
+        if entity.secondary_time_index is not None:
+            second_time_index = entity.secondary_time_index
+            entity_id = entity.entity_id
+            EntitySet._validate_time_index_col(entity.df, entity_id, second_time_index)
+
+    @staticmethod
+    def _validate_time_index_col(df: DataFrame, entity_id: str, time_index: str):
+        def validate_single_row(row: Row):
+            time_str = row[time_index]
+            try:
+                return parser.parse(time_str)
+            except Exception:
+                raise ValueError("Cannot parse '{0}' of time index column "
+                                 "'{1}' in entity '{2}'! ".format(time_str,
+                                                                  EntitySpark.recover_col_name(entity_id, time_index),
+                                                                  entity_id))
+        df.foreach(validate_single_row)
 
 
 def dfs(spark: SparkSession,
@@ -223,6 +246,8 @@ def dfs(spark: SparkSession,
             es = ft.EntitySet(id=es_id)
             for entity in entities:
                 columns = entity.columns
+
+                # TODO drop_duplicates here is TOO expensive. How to avoid using it?
                 df = data[columns].drop_duplicates()
                 entity_id = entity.entity_id
                 df.columns = [EntitySpark.recover_col_name(entity_id, col) for col in columns]
@@ -284,5 +309,9 @@ def dfs(spark: SparkSession,
     relationships = entityset.relationships
     rdd = repartitioned.rdd.mapPartitions(lambda iteration: run_single_partition(iteration, all_columns,
                                                                                  es_id, entities, relationships))
+
+    # TODO Convert the feature matrix to Spark DataFrame through this way is deprecated!
+    # But using Rdd of Rows will throw weird exceptions.
+    # Need to be fixed in near future otherwise it will be incompatible with newer Spark versions quickly!
     res_df = spark.createDataFrame(rdd)
     return res_df
