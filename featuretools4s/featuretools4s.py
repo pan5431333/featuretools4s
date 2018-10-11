@@ -8,7 +8,7 @@ import featuretools as ft
 class EntityColumn:
     def __init__(self, entity_id: str, column_name: str):
         self.entity_id = entity_id
-        self.column_name = column_name
+        self.column_name = EntitySpark.change_col_name(entity_id, column_name)
 
 
 class EntitySpark:
@@ -17,23 +17,39 @@ class EntitySpark:
                  df: DataFrame,
                  index: str = None,
                  variable_types: dict = None,
-                 make_index: bool = False,
                  time_index: str = None,
                  secondary_time_index: str = None):
         self.entity_id = entity_id
-        self.df = df
-        self.index = index
+        self.df = self._change_col_names(df)
+        self.index = self.change_col_name(entity_id, index)
         self.variable_types = variable_types
-        self.make_index = make_index
-        self.time_index = time_index
-        self.secondary_time_index = secondary_time_index
+        self.time_index = self.change_col_name(entity_id, time_index)
+        self.secondary_time_index = self.change_col_name(entity_id, secondary_time_index)
 
     def drop_data(self):
-        return EntitySparkWithoutData(self.entity_id, self.df.columns, self.index, self.variable_types, self.make_index,
+        return EntitySparkWithoutData(self.entity_id, self.df.columns, self.index, self.variable_types,
                                       self.time_index, self.secondary_time_index)
 
+    @staticmethod
+    def change_col_name(entity_id: str, col_name: str):
+        if col_name is None:
+            return None
+        return "{0}_{1}".format(entity_id, col_name)
+
+    @staticmethod
+    def recover_col_name(entity_id: str, col_name: str):
+        if col_name is None:
+            return None
+        return col_name[len(entity_id) + 1:]
+
+    def _change_col_names(self, df: DataFrame):
+        res = df
+        for col in df.columns:
+            res = res.withColumnRenamed(col, self.change_col_name(self.entity_id, col))
+        return res
+
     def __getitem__(self, column: str):
-        columns = self.df.columns
+        columns = [self.recover_col_name(self.entity_id, col) for col in self.df.columns]
         if column in columns:
             return EntityColumn(self.entity_id, column)
         raise KeyError("Column {0} doesn't exist in {1}".format(column, self.entity_id))
@@ -45,14 +61,12 @@ class EntitySparkWithoutData:
                  columns: list,
                  index: str = None,
                  variable_types: dict = None,
-                 make_index: bool = False,
                  time_index: str = None,
                  secondary_time_index: str = None):
         self.entity_id = entity_id
         self.columns = columns
         self.index = index
         self.variable_types = variable_types
-        self.make_index = make_index
         self.time_index = time_index
         self.secondary_time_index = secondary_time_index
 
@@ -66,7 +80,6 @@ class Relationship:
 class EntitySet:
     """
     todo Current known limitations:
-    1. Different entities should NOT have same columns. How to solve this?
     """
 
     def __init__(self, id: str):
@@ -79,10 +92,9 @@ class EntitySet:
                               dataframe: DataFrame,
                               index: str = None,
                               variable_types: dict = None,
-                              make_index: bool = False,
                               time_index: str = None,
                               secondary_time_index: str = None):
-        entity = EntitySpark(entity_id, dataframe, index, variable_types, make_index, time_index, secondary_time_index)
+        entity = EntitySpark(entity_id, dataframe, index, variable_types, time_index, secondary_time_index)
         self._validate_spark_entity(entity)
         self.entity_dict[entity_id] = entity
 
@@ -102,10 +114,7 @@ class EntitySet:
         parent_df = self.entity_dict[parent_entity].df
         child_df = self.entity_dict[child_entity].df
 
-        if parent_col == child_col:
-            res = parent_df.join(child_df, on=[parent_col])
-        else:
-            res = parent_df.join(child_df, parent_df[parent_col] == child_df[child_col])
+        res = parent_df.join(child_df, parent_df[parent_col] == child_df[child_col])
 
         if len(self.relationships) > 1:
             for relationship in self.relationships[1:]:
@@ -185,6 +194,7 @@ class EntitySet:
 def dfs(spark: SparkSession,
         entityset: EntitySet,
         target_entity: str,
+        primary_entity: str,
         primary_col: str,
         cutoff_time=None,
         agg_primitives: list = None,
@@ -196,8 +206,9 @@ def dfs(spark: SparkSession,
         n_jobs=1,
         num_partition: int = None):
     big_df = entityset.get_big_df()
-    n_partitions = num_partition if num_partition is not None else big_df.select(primary_col).distinct().count()
-    repartitioned = big_df.repartition(n_partitions, primary_col)
+    repartition_col = EntitySpark.change_col_name(primary_entity, primary_col)
+    n_partitions = num_partition if num_partition is not None else big_df.select(repartition_col).distinct().count()
+    repartitioned = big_df.repartition(n_partitions, repartition_col)
 
     def run_single_partition(iterator,
                              all_columns: list,
@@ -213,20 +224,22 @@ def dfs(spark: SparkSession,
             for entity in entities:
                 columns = entity.columns
                 df = data[columns].drop_duplicates()
+                entity_id = entity.entity_id
+                df.columns = [EntitySpark.recover_col_name(entity_id, col) for col in columns]
 
                 es.entity_from_dataframe(entity_id=entity.entity_id,
                                          dataframe=df,
-                                         index=entity.index,
+                                         index=EntitySpark.recover_col_name(entity_id, entity.index),
                                          variable_types=entity.variable_types,
-                                         make_index=entity.make_index,
-                                         time_index=entity.time_index,
-                                         secondary_time_index=entity.secondary_time_index)
+                                         time_index=EntitySpark.recover_col_name(entity_id, entity.time_index),
+                                         secondary_time_index=EntitySpark.recover_col_name(entity_id,
+                                                                                           entity.secondary_time_index))
 
             for relationship in relationships:
                 parent_entity = relationship.parent_variable.entity_id
-                parent_col = relationship.parent_variable.column_name
+                parent_col = EntitySpark.recover_col_name(parent_entity, relationship.parent_variable.column_name)
                 child_entity = relationship.child_variable.entity_id
-                child_col = relationship.child_variable.column_name
+                child_col = EntitySpark.recover_col_name(child_entity, relationship.child_variable.column_name)
                 es.add_relationship(ft.Relationship(es[parent_entity][parent_col],
                                                     es[child_entity][child_col]))
 
